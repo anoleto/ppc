@@ -41,7 +41,6 @@ pub struct ScoresResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PPCalculationResult {
-    pub player_name: String,
     pub beatmap_id: u64,
     pub original_pp: f64,
     pub recalculated_pp: f64,

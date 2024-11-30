@@ -71,7 +71,7 @@ async fn fetch_leaderboard(mode: u8, cache: &Cache) -> Result<LeaderboardRespons
 
 async fn fetch_player_scores(player_id: u64, mode: u8, cache: &Cache) -> Result<Vec<PlayerScore>, Box<dyn Error>> {
     let url = format!(
-        "https://api.refx.online/v1/get_player_scores?id={}&mode={}&scope=best&limit=5",
+        "https://api.refx.online/v1/get_player_scores?id={}&mode={}&scope=best&limit=10",
         player_id, mode
     );
     println!("Fetching scores for player {} in mode {} from {}", player_id, mode, url);
@@ -118,7 +118,6 @@ async fn calculate_pp(beatmap_path: &str, score: &PlayerScore, player_name: &str
     println!("Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}", player_name, original_pp, recalculated_pp, difference);
 
     Ok(PPCalculationResult {
-        player_name: player_name.to_string(),
         beatmap_id: score.beatmap.id,
         original_pp,
         recalculated_pp,
@@ -157,7 +156,6 @@ pub async fn calculate_pp_relax(beatmap_path: &str, score: &PlayerScore, player_
     );
 
     Ok(PPCalculationResult {
-        player_name: player_name.to_string(),
         beatmap_id: score.beatmap.id,
         original_pp,
         recalculated_pp,
@@ -196,7 +194,6 @@ pub async fn calculate_pp_scorev2(beatmap_path: &str, score: &PlayerScore, playe
     );
 
     Ok(PPCalculationResult {
-        player_name: player_name.to_string(),
         beatmap_id: score.beatmap.id,
         original_pp,
         recalculated_pp,
@@ -206,10 +203,10 @@ pub async fn calculate_pp_scorev2(beatmap_path: &str, score: &PlayerScore, playe
     })
 }
 
-pub async fn calculate_pp_now(mode: u8, beatmap_cache: &BeatmapCache, version: u8) -> Result<Vec<PPCalculationResult>, Box<dyn Error>> {
+pub async fn calculate_pp_now(mode: u8, beatmap_cache: &BeatmapCache, version: u8) -> Result<HashMap<String, Vec<PPCalculationResult>>, Box<dyn Error>> {
     println!("Calculating PP for leaderboard in mode {}", mode);
 
-    let mut pp_results = Vec::new();
+    let mut pp_results: HashMap<String, Vec<PPCalculationResult>> = HashMap::new();
     let cache = Cache::new();
 
     println!("Fetching global leaderboard...");
@@ -220,12 +217,13 @@ pub async fn calculate_pp_now(mode: u8, beatmap_cache: &BeatmapCache, version: u
 
     for entry in leaderboard.leaderboard {
         let player_id = entry.player_id;
+        let player_name = entry.name.clone();
         let mode = mode;
         let cache = cache.clone();
 
         let player_task = tokio::spawn(async move {
             let scores = fetch_player_scores(player_id, mode, &cache).await.unwrap_or_default();
-            (entry.name, scores)
+            (player_name, scores)
         });
 
         tasks.push(player_task);
@@ -236,6 +234,8 @@ pub async fn calculate_pp_now(mode: u8, beatmap_cache: &BeatmapCache, version: u
     for result in player_results {
         let (player_name, scores) = result.unwrap();
         println!("Fetched {} scores for player '{}'", scores.len(), player_name);
+
+        let mut results: Vec<PPCalculationResult> = Vec::new();
 
         for score in scores {
             let beatmap_path = beatmap_cache.get_beatmap_path(score.beatmap.id);
@@ -255,9 +255,10 @@ pub async fn calculate_pp_now(mode: u8, beatmap_cache: &BeatmapCache, version: u
                 _ => return Err("Invalid version!".into()),
             };
             
-
-            pp_results.push(pp_result);
+            results.push(pp_result);
         }
+
+        pp_results.insert(player_name, results);
     }
 
     println!("Finished calculating PP for leaderboard.");

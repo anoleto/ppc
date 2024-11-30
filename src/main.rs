@@ -18,7 +18,7 @@ use crate::api::calculate_pp_now;
 async fn handle_pp_calculation(
     State(beatmap_cache): State<BeatmapCache>,
     Query(params): Query<HashMap<String, String>>
-) -> Result<Json<Vec<models::PPCalculationResult>>, (StatusCode, String)> {
+) -> Result<Json<HashMap<String, Vec<models::PPCalculationResult>>>, (StatusCode, String)> {
     let mode = params.get("mode")
         .and_then(|m| m.parse::<u8>().ok())
         .unwrap_or(0);
@@ -39,7 +39,7 @@ async fn handle_pp_calculation(
             "Invalid version. Must be between 0 and 2.".to_string()
         ));
     }
-    
+
     match calculate_pp_now(mode, &beatmap_cache, version).await {
         Ok(results) => Ok(Json(results)),
         Err(e) => {
