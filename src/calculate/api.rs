@@ -1,59 +1,20 @@
 use std::error::Error;
-use refx_pp_rs::{Beatmap, BeatmapExt};
-use reqwest;
-use crate::models::{LeaderboardResponse, PlayerScore, PPCalculationResult, ScoresResponse};
-use crate::beatmap::BeatmapCache;
-
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
-use futures::future::join_all;
 use std::env;
 
-#[derive(Clone)]
-struct Cache {
-    data: Arc<RwLock<HashMap<String, CacheEntry>>>,
-    cache_duration: Duration,
-}
+use refx_pp_rs::{Beatmap, BeatmapExt};
+use reqwest;
+use futures::future::join_all;
 
-struct CacheEntry {
-    value: String,
-    timestamp: Instant,
-}
-
-impl Cache {
-    fn new(duration_secs: u64) -> Self {
-        Cache {
-            data: Arc::new(RwLock::new(HashMap::new())),
-            cache_duration: Duration::from_secs(duration_secs),
-        }
-    }
-
-    fn get(&self, key: &str) -> Option<String> {
-        let cache = self.data.read().unwrap();
-        if let Some(entry) = cache.get(key) {
-            if entry.timestamp.elapsed() < self.cache_duration {
-                println!("Cache hit for key: {}", key);
-                return Some(entry.value.clone());
-            } else {
-                println!("Cache expired for key: {}", key);
-            }
-        }
-        None
-    }
-
-    fn set(&self, key: &str, value: String) {
-        let mut cache = self.data.write().unwrap();
-        cache.insert(key.to_string(), CacheEntry {
-            value,
-            timestamp: Instant::now(),
-        });
-
-        cache.retain(|_, entry| entry.timestamp.elapsed() < self.cache_duration);
-        
-        println!("Cache updated for key: {}", key);
-    }
-}
+use crate::models::{
+    LeaderboardResponse, 
+    PlayerScore, 
+    PPCalculationResult, 
+    ScoresResponse
+};
+use crate::beatmap::BeatmapCache;
+use super::cache::Cache;
+use super::utils::round;
 
 async fn fetch_leaderboard(mode: u8, cache: &Cache) -> Result<LeaderboardResponse, Box<dyn Error>> {
     let url = format!(
@@ -107,11 +68,6 @@ async fn fetch_player_scores(player_id: u64, mode: u8, cache: &Cache) -> Result<
     Ok(player_scores.scores)
 }
 
-pub fn round(x: f64, decimals: u32) -> f64 {
-    let y = 10i32.pow(decimals) as f64;
-    (x * y).round() / y
-}
-
 async fn calculate_pp_vn(beatmap_path: &str, score: &PlayerScore, player_name: &str) -> Result<PPCalculationResult, Box<dyn Error>> {
     println!("Calculating PP for player '{}' using beatmap path '{}'", player_name, beatmap_path);
 
@@ -151,7 +107,7 @@ async fn calculate_pp_vn(beatmap_path: &str, score: &PlayerScore, player_name: &
     );
 
     Ok(PPCalculationResult {
-        stars: stars,
+        stars,
         beatmap_id: score.beatmap.id,
         original_pp,
         recalculated_pp,
@@ -182,27 +138,28 @@ pub async fn calculate_pp_relax(beatmap_path: &str, score: &PlayerScore, player_
         .calculate();
 
     let mut recalculated_pp = round(result.pp, 2);
-    
+
     if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
-        println!("Calculated pp is infinite or NaN");
+        println!("Calculated RX PP is infinite or NaN");
         recalculated_pp = 0.0;
     }
 
     let difference = recalculated_pp - original_pp;
+
     let mut stars = round(result.difficulty.stars, 2);
 
     if stars.is_infinite() || stars.is_nan() {
-        println!("Calculated stars is infinite or NaN");
+        println!("Calculated RX stars is infinite or NaN");
         stars = 0.0;
     }
 
     println!(
-        "Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}, Stars = {}", 
+        "Calculated RX PP for player '{}': Original = {}, Recalculated = {}, Difference = {}, Stars = {}", 
         player_name, original_pp, recalculated_pp, difference, stars
     );
 
     Ok(PPCalculationResult {
-        stars: stars,
+        stars,
         beatmap_id: score.beatmap.id,
         original_pp,
         recalculated_pp,
@@ -212,7 +169,12 @@ pub async fn calculate_pp_relax(beatmap_path: &str, score: &PlayerScore, player_
     })
 }
 
-pub async fn calculate_pp_scorev2(beatmap_path: &str, score: &PlayerScore, player_name: &str, relax: bool) -> Result<PPCalculationResult, Box<dyn Error>> {
+async fn calculate_pp_scorev2(
+    beatmap_path: &str, 
+    score: &PlayerScore, 
+    player_name: &str, 
+    relax: bool
+) -> Result<PPCalculationResult, Box<dyn Error>> {
     println!(
         "Calculating ScoreV2 PP for player '{}' using beatmap path '{}'",
         player_name, beatmap_path
@@ -253,7 +215,7 @@ pub async fn calculate_pp_scorev2(beatmap_path: &str, score: &PlayerScore, playe
     );
 
     Ok(PPCalculationResult {
-        stars: stars,
+        stars,
         beatmap_id: score.beatmap.id,
         original_pp,
         recalculated_pp,

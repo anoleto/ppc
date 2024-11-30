@@ -1,5 +1,5 @@
 mod models;
-mod api;
+mod calculate;
 mod beatmap;
 
 use axum::{
@@ -13,7 +13,7 @@ use std::error::Error;
 use std::collections::HashMap;
 
 use crate::beatmap::BeatmapCache;
-use crate::api::calculate_pp_now;
+use crate::calculate::calculate_pp_now;
 
 use dotenv::dotenv;
 
