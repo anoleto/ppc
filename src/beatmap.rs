@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use tokio::fs::{self, create_dir_all};
 use reqwest;
 use thiserror::Error;
+use std::env;
 
 #[derive(Error, Debug)]
 pub enum BeatmapCacheError {
@@ -18,7 +19,7 @@ pub struct BeatmapCache {
 
 impl BeatmapCache {
     pub fn new() -> Self {
-        let cache_dir = PathBuf::from(".data/beatmaps");
+        let cache_dir = PathBuf::from(env::var("BEATMAP_PATH").expect(".data/beatmaps"));
         Self { cache_dir }
     }
 
