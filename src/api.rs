@@ -5,30 +5,35 @@ use crate::models::{LeaderboardResponse, PlayerScore, PPCalculationResult, Score
 use crate::beatmap::BeatmapCache;
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use futures::future::join_all;
 
 #[derive(Clone)]
 struct Cache {
-    data: Arc<Mutex<HashMap<String, (String, Instant)>>>,
+    data: Arc<RwLock<HashMap<String, CacheEntry>>>,
     cache_duration: Duration,
 }
 
+struct CacheEntry {
+    value: String,
+    timestamp: Instant,
+}
+
 impl Cache {
-    fn new() -> Self {
+    fn new(duration_secs: u64) -> Self {
         Cache {
-            data: Arc::new(Mutex::new(HashMap::new())),
-            cache_duration: Duration::new(60, 0),
+            data: Arc::new(RwLock::new(HashMap::new())),
+            cache_duration: Duration::from_secs(duration_secs),
         }
     }
 
     fn get(&self, key: &str) -> Option<String> {
-        let cache = self.data.lock().unwrap();
-        if let Some((response, timestamp)) = cache.get(key) {
-            if timestamp.elapsed() < self.cache_duration {
+        let cache = self.data.read().unwrap();
+        if let Some(entry) = cache.get(key) {
+            if entry.timestamp.elapsed() < self.cache_duration {
                 println!("Cache hit for key: {}", key);
-                return Some(response.clone());
+                return Some(entry.value.clone());
             } else {
                 println!("Cache expired for key: {}", key);
             }
@@ -37,8 +42,14 @@ impl Cache {
     }
 
     fn set(&self, key: &str, value: String) {
-        let mut cache = self.data.lock().unwrap();
-        cache.insert(key.to_string(), (value, Instant::now()));
+        let mut cache = self.data.write().unwrap();
+        cache.insert(key.to_string(), CacheEntry {
+            value,
+            timestamp: Instant::now(),
+        });
+
+        cache.retain(|_, entry| entry.timestamp.elapsed() < self.cache_duration);
+        
         println!("Cache updated for key: {}", key);
     }
 }
@@ -95,7 +106,7 @@ async fn fetch_player_scores(player_id: u64, mode: u8, cache: &Cache) -> Result<
     Ok(player_scores.scores)
 }
 
-async fn calculate_pp(beatmap_path: &str, score: &PlayerScore, player_name: &str) -> Result<PPCalculationResult, Box<dyn Error>> {
+async fn calculate_pp_vn(beatmap_path: &str, score: &PlayerScore, player_name: &str) -> Result<PPCalculationResult, Box<dyn Error>> {
     println!("Calculating PP for player '{}' using beatmap path '{}'", player_name, beatmap_path);
 
     let map = Beatmap::from_path(beatmap_path)?;
@@ -112,7 +123,13 @@ async fn calculate_pp(beatmap_path: &str, score: &PlayerScore, player_name: &str
         .n_misses(score.nmiss)
         .calculate();
 
-    let recalculated_pp = result.pp();
+    let mut recalculated_pp = result.pp();
+
+    if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
+        println!("Calculated pp is infinite or NaN");
+        recalculated_pp = 0.0;
+    }
+
     let difference = recalculated_pp - original_pp;
 
     println!("Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}", player_name, original_pp, recalculated_pp, difference);
@@ -147,7 +164,13 @@ pub async fn calculate_pp_relax(beatmap_path: &str, score: &PlayerScore, player_
         .misses(score.nmiss)
         .calculate();
 
-    let recalculated_pp = result.pp;
+    let mut recalculated_pp = result.pp;
+    
+    if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
+        println!("Calculated pp is infinite or NaN");
+        recalculated_pp = 0.0;
+    }
+
     let difference = recalculated_pp - original_pp;
 
     println!(
@@ -185,7 +208,13 @@ pub async fn calculate_pp_scorev2(beatmap_path: &str, score: &PlayerScore, playe
         .misses(score.nmiss)
         .calculate();
 
-    let recalculated_pp = result.pp;
+    let mut recalculated_pp = result.pp;
+
+    if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
+        println!("Calculated pp is infinite or NaN");
+        recalculated_pp = 0.0;
+    }
+
     let difference = recalculated_pp - original_pp;
 
     println!(
@@ -212,7 +241,7 @@ pub async fn calculate_pp_now(
     println!("Calculating PP for leaderboard in mode {}", mode);
 
     let mut pp_results: HashMap<String, Vec<PPCalculationResult>> = HashMap::new();
-    let cache = Cache::new();
+    let cache = Cache::new(60);
 
     println!("Fetching global leaderboard...");
     let leaderboard = fetch_leaderboard(mode, &cache).await?;
@@ -254,7 +283,7 @@ pub async fn calculate_pp_now(
             }
 
             let pp_result = match version {
-                0 => calculate_pp(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
+                0 => calculate_pp_vn(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
                 1 => calculate_pp_relax(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
                 2 => calculate_pp_scorev2(beatmap_path.to_str().unwrap(), &score, &player_name, rx).await?,
                 _ => return Err("Invalid version!".into()),
