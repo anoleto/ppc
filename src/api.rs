@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use futures::future::join_all;
+use std::env;
 
 #[derive(Clone)]
 struct Cache {
@@ -56,8 +57,8 @@ impl Cache {
 
 async fn fetch_leaderboard(mode: u8, cache: &Cache) -> Result<LeaderboardResponse, Box<dyn Error>> {
     let url = format!(
-        "https://api.refx.online/v1/get_leaderboard?mode={}&limit=10",
-        mode
+        "https://api.{}/v1/get_leaderboard?mode={}&limit=10",
+        env::var("URL").expect(""), mode
     );
     println!("Fetching leaderboard from mode {}, {}", mode, url);
 
@@ -82,8 +83,8 @@ async fn fetch_leaderboard(mode: u8, cache: &Cache) -> Result<LeaderboardRespons
 
 async fn fetch_player_scores(player_id: u64, mode: u8, cache: &Cache) -> Result<Vec<PlayerScore>, Box<dyn Error>> {
     let url = format!(
-        "https://api.refx.online/v1/get_player_scores?id={}&mode={}&scope=best&limit=10",
-        player_id, mode
+        "https://api.{}/v1/get_player_scores?id={}&mode={}&scope=best&limit=10",
+        env::var("URL").expect(""), player_id, mode
     );
     println!("Fetching scores for player {} in mode {} from {}", player_id, mode, url);
 

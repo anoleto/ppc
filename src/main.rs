@@ -15,6 +15,8 @@ use std::collections::HashMap;
 use crate::beatmap::BeatmapCache;
 use crate::api::calculate_pp_now;
 
+use dotenv::dotenv;
+
 async fn handle_pp_calculation(
     State(beatmap_cache): State<BeatmapCache>,
     Query(params): Query<HashMap<String, String>>
@@ -57,6 +59,7 @@ async fn handle_pp_calculation(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    dotenv().ok();
     let beatmap_cache = BeatmapCache::new();
 
     beatmap_cache.ensure_cache_exists().await?;
