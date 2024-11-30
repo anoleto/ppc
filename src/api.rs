@@ -133,9 +133,20 @@ async fn calculate_pp_vn(beatmap_path: &str, score: &PlayerScore, player_name: &
 
     let difference = recalculated_pp - original_pp;
 
-    println!("Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}", player_name, original_pp, recalculated_pp, difference);
+    let mut stars = result.stars();
+
+    if stars.is_infinite() || stars.is_nan() {
+        println!("Calculated stars is infinite or NaN");
+        stars = 0.0;
+    }
+
+    println!(
+        "Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}, Stars = {}", 
+        player_name, original_pp, recalculated_pp, difference, stars
+    );
 
     Ok(PPCalculationResult {
+        stars: stars,
         beatmap_id: score.beatmap.id,
         original_pp,
         recalculated_pp,
@@ -173,13 +184,20 @@ pub async fn calculate_pp_relax(beatmap_path: &str, score: &PlayerScore, player_
     }
 
     let difference = recalculated_pp - original_pp;
+    let mut stars = result.difficulty.stars;
+
+    if stars.is_infinite() || stars.is_nan() {
+        println!("Calculated stars is infinite or NaN");
+        stars = 0.0;
+    }
 
     println!(
-        "Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}",
-        player_name, original_pp, recalculated_pp, difference
+        "Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}, Stars = {}", 
+        player_name, original_pp, recalculated_pp, difference, stars
     );
 
     Ok(PPCalculationResult {
+        stars: stars,
         beatmap_id: score.beatmap.id,
         original_pp,
         recalculated_pp,
@@ -217,13 +235,20 @@ pub async fn calculate_pp_scorev2(beatmap_path: &str, score: &PlayerScore, playe
     }
 
     let difference = recalculated_pp - original_pp;
+    let mut stars = result.difficulty.stars;
+
+    if stars.is_infinite() || stars.is_nan() {
+        println!("Calculated stars is infinite or NaN");
+        stars = 0.0;
+    }
 
     println!(
-        "Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}",
-        player_name, original_pp, recalculated_pp, difference
+        "Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}, Stars = {}", 
+        player_name, original_pp, recalculated_pp, difference, stars
     );
 
     Ok(PPCalculationResult {
+        stars: stars,
         beatmap_id: score.beatmap.id,
         original_pp,
         recalculated_pp,
