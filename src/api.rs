@@ -165,7 +165,7 @@ pub async fn calculate_pp_relax(beatmap_path: &str, score: &PlayerScore, player_
     })
 }
 
-pub async fn calculate_pp_scorev2(beatmap_path: &str, score: &PlayerScore, player_name: &str) -> Result<PPCalculationResult, Box<dyn Error>> {
+pub async fn calculate_pp_scorev2(beatmap_path: &str, score: &PlayerScore, player_name: &str, relax: bool) -> Result<PPCalculationResult, Box<dyn Error>> {
     println!(
         "Calculating ScoreV2 PP for player '{}' using beatmap path '{}'",
         player_name, beatmap_path
@@ -176,7 +176,7 @@ pub async fn calculate_pp_scorev2(beatmap_path: &str, score: &PlayerScore, playe
     let original_pp = score.pp;
 
     let result = refx_pp_rs::osu_2019_scorev2::FxPP::new_from_map(&map)
-        .mods(score.mods)
+        .mods(score.mods | if relax { 1 << 7 } else { 0 })
         .combo(score.max_combo)
         .accuracy(score.acc as f32)
         .n300(score.n300)
@@ -198,12 +198,17 @@ pub async fn calculate_pp_scorev2(beatmap_path: &str, score: &PlayerScore, playe
         original_pp,
         recalculated_pp,
         difference,
-        mods: score.mods,
+        mods: score.mods | if relax { 1 << 7 } else { 0 },
         version: 2,
     })
 }
 
-pub async fn calculate_pp_now(mode: u8, beatmap_cache: &BeatmapCache, version: u8) -> Result<HashMap<String, Vec<PPCalculationResult>>, Box<dyn Error>> {
+pub async fn calculate_pp_now(
+    mode: u8, 
+    beatmap_cache: &BeatmapCache, 
+    version: u8,
+    rx: bool,
+) -> Result<HashMap<String, Vec<PPCalculationResult>>, Box<dyn Error>> {
     println!("Calculating PP for leaderboard in mode {}", mode);
 
     let mut pp_results: HashMap<String, Vec<PPCalculationResult>> = HashMap::new();
@@ -251,7 +256,7 @@ pub async fn calculate_pp_now(mode: u8, beatmap_cache: &BeatmapCache, version: u
             let pp_result = match version {
                 0 => calculate_pp(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
                 1 => calculate_pp_relax(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
-                2 => calculate_pp_scorev2(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
+                2 => calculate_pp_scorev2(beatmap_path.to_str().unwrap(), &score, &player_name, rx).await?,
                 _ => return Err("Invalid version!".into()),
             };
             
