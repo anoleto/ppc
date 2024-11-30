@@ -107,12 +107,17 @@ async fn fetch_player_scores(player_id: u64, mode: u8, cache: &Cache) -> Result<
     Ok(player_scores.scores)
 }
 
+pub fn round(x: f64, decimals: u32) -> f64 {
+    let y = 10i32.pow(decimals) as f64;
+    (x * y).round() / y
+}
+
 async fn calculate_pp_vn(beatmap_path: &str, score: &PlayerScore, player_name: &str) -> Result<PPCalculationResult, Box<dyn Error>> {
     println!("Calculating PP for player '{}' using beatmap path '{}'", player_name, beatmap_path);
 
     let map = Beatmap::from_path(beatmap_path)?;
 
-    let original_pp = score.pp;
+    let original_pp = round(score.pp, 2);
 
     let result = map.pp()
         .mods(score.mods)
@@ -124,7 +129,7 @@ async fn calculate_pp_vn(beatmap_path: &str, score: &PlayerScore, player_name: &
         .n_misses(score.nmiss)
         .calculate();
 
-    let mut recalculated_pp = result.pp();
+    let mut recalculated_pp = round(result.pp(), 2);
 
     if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
         println!("Calculated pp is infinite or NaN");
@@ -133,7 +138,7 @@ async fn calculate_pp_vn(beatmap_path: &str, score: &PlayerScore, player_name: &
 
     let difference = recalculated_pp - original_pp;
 
-    let mut stars = result.stars();
+    let mut stars = round(result.stars(), 2);
 
     if stars.is_infinite() || stars.is_nan() {
         println!("Calculated stars is infinite or NaN");
@@ -164,7 +169,7 @@ pub async fn calculate_pp_relax(beatmap_path: &str, score: &PlayerScore, player_
 
     let map = Beatmap::from_path(beatmap_path)?;
 
-    let original_pp = score.pp;
+    let original_pp = round(score.pp, 2);
 
     let result = refx_pp_rs::osu_2019::OsuPP::new(&map)
         .mods(score.mods)
@@ -176,7 +181,7 @@ pub async fn calculate_pp_relax(beatmap_path: &str, score: &PlayerScore, player_
         .misses(score.nmiss)
         .calculate();
 
-    let mut recalculated_pp = result.pp;
+    let mut recalculated_pp = round(result.pp, 2);
     
     if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
         println!("Calculated pp is infinite or NaN");
@@ -184,7 +189,7 @@ pub async fn calculate_pp_relax(beatmap_path: &str, score: &PlayerScore, player_
     }
 
     let difference = recalculated_pp - original_pp;
-    let mut stars = result.difficulty.stars;
+    let mut stars = round(result.difficulty.stars, 2);
 
     if stars.is_infinite() || stars.is_nan() {
         println!("Calculated stars is infinite or NaN");
@@ -215,7 +220,7 @@ pub async fn calculate_pp_scorev2(beatmap_path: &str, score: &PlayerScore, playe
 
     let map = Beatmap::from_path(beatmap_path)?;
 
-    let original_pp = score.pp;
+    let original_pp = round(score.pp, 2);
 
     let result = refx_pp_rs::osu_2019_scorev2::FxPP::new_from_map(&map)
         .mods(score.mods | if relax { 1 << 7 } else { 0 })
@@ -227,7 +232,7 @@ pub async fn calculate_pp_scorev2(beatmap_path: &str, score: &PlayerScore, playe
         .misses(score.nmiss)
         .calculate();
 
-    let mut recalculated_pp = result.pp;
+    let mut recalculated_pp = round(result.pp, 2);
 
     if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
         println!("Calculated pp is infinite or NaN");
@@ -235,7 +240,7 @@ pub async fn calculate_pp_scorev2(beatmap_path: &str, score: &PlayerScore, playe
     }
 
     let difference = recalculated_pp - original_pp;
-    let mut stars = result.difficulty.stars;
+    let mut stars = round(result.difficulty.stars, 2);
 
     if stars.is_infinite() || stars.is_nan() {
         println!("Calculated stars is infinite or NaN");
