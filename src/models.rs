@@ -11,6 +11,13 @@ pub struct PlayerScore {
     pub n100: usize,
     pub n50: usize,
     pub nmiss: usize,
+
+    pub aim_value: usize,
+    pub ar_value: f64,
+    pub cs: usize,
+    pub twval: f64,
+    pub hdr: usize,
+
     pub beatmap: BeatmapInfo,
 }
 

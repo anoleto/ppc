@@ -121,12 +121,18 @@ pub async fn calculate_pp_now(
             // LMFAOO IM CRYING
             let pp_result = match branch {
                 0 => match version {
+                    0 => calculate::calculate_pp_vn_cv(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
+                    1 => calculate::calculate_pp_relax_cv(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
+                    2 => calculate::calculate_pp_scorev2_cv(beatmap_path.to_str().unwrap(), &score, &player_name, rx).await?,
+                    _ => return Err("Invalid version!".into()),
+                },
+                1 => match version {
                     0 => calculate::calculate_pp_vn(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
                     1 => calculate::calculate_pp_relax(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
                     2 => calculate::calculate_pp_scorev2(beatmap_path.to_str().unwrap(), &score, &player_name, rx).await?,
                     _ => return Err("Invalid version!".into()),
                 },
-                1 => match version {
+                2 => match version {
                     0 => calculate::calculate_pp_vn_lgt(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
                     1 => calculate::calculate_pp_relax_lgt(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
                     2 => calculate::calculate_pp_scorev2_lgt(beatmap_path.to_str().unwrap(), &score, &player_name, rx).await?,
