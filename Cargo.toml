@@ -14,5 +14,7 @@ thiserror = "1.0"
 futures = "0.3"
 dotenv = "0.15.0"
 
-# refx-pp-rs = { package = "refx-pp", git = "https://github.com/refx-online/refx-pp-rs/", rev = "cec48acc468b9dbaf7beb208c8854af84694f8ea" }
-refx-pp-rs = { package = "refx-pp", git = "https://github.com/refx-online/refx-pp-rs/", rev = "c0033ebe9ac7719255392fc214ff30d2fddd6a57" }
+refx-pp-rs = { package = "refx-pp", git = "https://github.com/refx-online/refx-pp-rs/", rev = "cec48acc468b9dbaf7beb208c8854af84694f8ea" }
+if-servers-legit = { package = "refx-pp", git = "https://github.com/refx-online/refx-pp-rs/", rev = "c0033ebe9ac7719255392fc214ff30d2fddd6a57", features = [
+    "async_tokio",
+] }

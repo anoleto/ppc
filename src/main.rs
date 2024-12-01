@@ -30,6 +30,9 @@ async fn handle_pp_calculation(
     let rx = params.get("rx")
         .and_then(|m| m.parse::<bool>().ok())
         .unwrap_or(false);
+    let branch = params.get("branch")
+        .and_then(|m| m.parse::<u8>().ok())
+        .unwrap_or( 0);
 
     if mode > 8 {
         return Err((
@@ -45,7 +48,20 @@ async fn handle_pp_calculation(
         ));
     }
 
-    match calculate_pp_now(mode, &beatmap_cache, version, rx).await {
+    if branch > 5 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Invalid branch. Must be between 0 and 5".to_string()
+        ))
+    }
+
+    match calculate_pp_now(
+        mode, 
+        &beatmap_cache, 
+        version, 
+        rx,
+        branch,
+    ).await {
         Ok(results) => Ok(Json(results)),
         Err(e) => {
             eprintln!("Error: {}", e);
