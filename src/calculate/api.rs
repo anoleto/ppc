@@ -119,6 +119,13 @@ pub async fn calculate_pp_now(
             }
 
             // LMFAOO IM CRYING
+            // &version    0 = vn
+            //             1 = rx
+            //             2 = sv2
+            //
+            // &branch     0 = main with cv
+            //             1 = main without cv
+            //             2 = if-servers-legit
             let pp_result = match branch {
                 0 => match version {
                     0 => calculate::calculate_pp_vn_cv(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
