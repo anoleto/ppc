@@ -1,3 +1,9 @@
+
+/// used for api request and calculate pp, it should be using query to retrieve the scores
+/// but the teacher told me to "make an api request and do something fun with it"
+/// WHATS fun with this\
+/// will be used for the server in the future if i care
+
 use std::error::Error;
 use std::collections::HashMap;
 use std::env;
@@ -14,7 +20,9 @@ use crate::models::{
 use crate::beatmap::BeatmapCache;
 use super::cache::Cache;
 use crate::calculate::calculate;
+use crate::calculate::calculate::PPCalculationType;
 
+// this shouldnt be used if it used for the server
 async fn fetch_leaderboard(mode: u8, cache: &Cache) -> Result<LeaderboardResponse, Box<dyn Error>> {
     let url = format!(
         "https://api.{}/v1/get_leaderboard?mode={}&limit=10",
@@ -123,26 +131,33 @@ pub async fn calculate_pp_now(
             //             1 = rx
             //             2 = sv2
             //
-            // &branch     0 = main with cv
-            //             1 = main without cv
-            //             2 = if-servers-legit
+            // &branch     0 = live pp
+            //             1 = main with cv
+            //             2 = main without cv
+            //             3 = if-servers-legit 
             let pp_result = match branch {
                 0 => match version {
-                    0 => calculate::calculate_pp_vn_cv(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
-                    1 => calculate::calculate_pp_relax_cv(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
-                    2 => calculate::calculate_pp_scorev2_cv(beatmap_path.to_str().unwrap(), &score, &player_name, rx).await?,
+                    0 => calculate::calculate_pp(beatmap_path.to_str().unwrap(), &score, &player_name, PPCalculationType::VanillaCheatsLive).await?,
+                    1 => calculate::calculate_pp(beatmap_path.to_str().unwrap(), &score, &player_name, PPCalculationType::RelaxCheatsLive).await?,
+                    2 => calculate::calculate_pp(beatmap_path.to_str().unwrap(), &score, &player_name, PPCalculationType::ScoreV2CheatsLive { relax: rx }).await?,
                     _ => return Err("Invalid version!".into()),
                 },
                 1 => match version {
-                    0 => calculate::calculate_pp_vn(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
-                    1 => calculate::calculate_pp_relax(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
-                    2 => calculate::calculate_pp_scorev2(beatmap_path.to_str().unwrap(), &score, &player_name, rx).await?,
+                    0 => calculate::calculate_pp(beatmap_path.to_str().unwrap(), &score, &player_name, PPCalculationType::VanillaCheats).await?,
+                    1 => calculate::calculate_pp(beatmap_path.to_str().unwrap(), &score, &player_name, PPCalculationType::RelaxCheats).await?,
+                    2 => calculate::calculate_pp(beatmap_path.to_str().unwrap(), &score, &player_name, PPCalculationType::ScoreV2Cheats { relax: rx }).await?,
                     _ => return Err("Invalid version!".into()),
                 },
                 2 => match version {
-                    0 => calculate::calculate_pp_vn_lgt(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
-                    1 => calculate::calculate_pp_relax_lgt(beatmap_path.to_str().unwrap(), &score, &player_name).await?,
-                    2 => calculate::calculate_pp_scorev2_lgt(beatmap_path.to_str().unwrap(), &score, &player_name, rx).await?,
+                    0 => calculate::calculate_pp(beatmap_path.to_str().unwrap(), &score, &player_name, PPCalculationType::VanillaNoCV).await?,
+                    1 => calculate::calculate_pp(beatmap_path.to_str().unwrap(), &score, &player_name, PPCalculationType::RelaxNoCV).await?,
+                    2 => calculate::calculate_pp(beatmap_path.to_str().unwrap(), &score, &player_name, PPCalculationType::ScoreV2NoCV { relax: rx }).await?,
+                    _ => return Err("Invalid version!".into()),
+                },
+                3 => match version {
+                    0 => calculate::calculate_pp(beatmap_path.to_str().unwrap(), &score, &player_name, PPCalculationType::VanillaLegit).await?,
+                    1 => calculate::calculate_pp(beatmap_path.to_str().unwrap(), &score, &player_name, PPCalculationType::RelaxLegit).await?,
+                    2 => calculate::calculate_pp(beatmap_path.to_str().unwrap(), &score, &player_name, PPCalculationType::ScoreV2Legit { relax: rx }).await?,
                     _ => return Err("Invalid version!".into()),
                 },
                 _ => return Err("Invalid branch!".into()),

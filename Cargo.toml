@@ -18,3 +18,6 @@ refx-pp-rs = { package = "refx-pp", git = "https://github.com/refx-online/refx-p
 if-servers-legit = { package = "refx-pp", git = "https://github.com/refx-online/refx-pp-rs/", rev = "c0033ebe9ac7719255392fc214ff30d2fddd6a57", features = [
     "async_tokio",
 ] }
+live-pp = { package = "refx-pp", git = "https://github.com/refx-online/refx-pp-rs/", rev = "8b69e766597a3e501ad08acf6f569eb877bf7ab1", features = [
+    "async_tokio",
+] }

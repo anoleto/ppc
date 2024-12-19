@@ -1,505 +1,280 @@
+
+/// this only calculates standard
+/// used to calculate reworks and future updates on the
+/// std pp system
+
 use std::error::Error;
 use crate::models::{PlayerScore, PPCalculationResult};
 use crate::calculate::utils::round;
 
 use refx_pp_rs::{Beatmap, BeatmapExt};
 use if_servers_legit::{Beatmap as ifLegitBeatmap, BeatmapExt as ifLegitExt};
+use live_pp::{Beatmap as livePPBeatmap, BeatmapExt as livePPExt};
 
-// Love me for making 3 functions for every branch
+#[derive(Clone, Copy)]
+pub enum PPCalculationType {
 
-/// main
-pub async fn calculate_pp_vn(
-    beatmap_path: &str, 
-    score: &PlayerScore, 
-    player_name: &str
-) -> Result<PPCalculationResult, Box<dyn Error>> {
-    println!("Calculating PP for player '{}' using beatmap path '{}'", player_name, beatmap_path);
+    /// main without cv (cheat value)
+    VanillaNoCV,
+    RelaxNoCV,
+    ScoreV2NoCV { relax: bool },
 
-    let map = Beatmap::from_path(beatmap_path)?;
+    /// main with cv (cheat value)
+    VanillaCheats,
+    RelaxCheats,
+    ScoreV2Cheats { relax: bool },
 
-    let original_pp = round(score.pp, 2);
+    /// if-servers-legit
+    VanillaLegit,
+    RelaxLegit,
+    ScoreV2Legit { relax: bool },
 
-    let result = map.pp()
-        .mods(score.mods)
-        .combo(score.max_combo)
-        .accuracy(score.acc)
-        .n300(score.n300)
-        .n100(score.n100)
-        .n50(score.n50)
-        .n_misses(score.nmiss)
-        .calculate();
+    /// live pp
+    VanillaCheatsLive,
+    RelaxCheatsLive,
+    ScoreV2CheatsLive { relax: bool },
 
-    let mut recalculated_pp = round(result.pp(), 2);
-
-    if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
-        println!("Calculated pp is infinite or NaN");
-        recalculated_pp = 0.0;
-    }
-
-    let difference = recalculated_pp - original_pp;
-
-    let mut stars = round(result.stars(), 2);
-
-    if stars.is_infinite() || stars.is_nan() {
-        println!("Calculated stars is infinite or NaN");
-        stars = 0.0;
-    }
-
-    println!(
-        "Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}, Stars = {}", 
-        player_name, original_pp, recalculated_pp, difference, stars
-    );
-
-    Ok(PPCalculationResult {
-        stars,
-        beatmap_id: score.beatmap.id,
-        original_pp,
-        recalculated_pp,
-        difference,
-        mods: score.mods,
-        version: 0,
-    })
 }
 
-pub async fn calculate_pp_relax(
-    beatmap_path: &str, 
-    score: &PlayerScore, 
-    player_name: &str
+pub async fn calculate_pp(
+    beatmap_path: &str,
+    score: &PlayerScore,
+    player_name: &str,
+    calc_type: PPCalculationType,
 ) -> Result<PPCalculationResult, Box<dyn Error>> {
     println!(
-        "Calculating RX PP for player '{}' using beatmap path '{}'",
+        "Calculating PP for player '{}' using beatmap path '{}'",
         player_name, beatmap_path
     );
 
-    let map = Beatmap::from_path(beatmap_path)?;
-
     let original_pp = round(score.pp, 2);
+    let (recalculated_pp, stars, mods) = match calc_type {
 
-    let result = refx_pp_rs::osu_2019::OsuPP::new(&map)
-        .mods(score.mods)
-        .combo(score.max_combo)
-        .accuracy(score.acc as f32)
-        .n300(score.n300)
-        .n100(score.n100)
-        .n50(score.n50)
-        .misses(score.nmiss)
-        .calculate();
+        PPCalculationType::VanillaNoCV => {
+            let map = Beatmap::from_path(beatmap_path)?;
+            let result = map.pp()
+                .mods(score.mods)
+                .combo(score.max_combo)
+                .accuracy(score.acc)
+                .n300(score.n300)
+                .n100(score.n100)
+                .n50(score.n50)
+                .n_misses(score.nmiss)
+                .calculate();
+            (result.pp(), result.stars(), score.mods)
+        },
 
-    let mut recalculated_pp = round(result.pp, 2);
+        PPCalculationType::RelaxNoCV => {
+            let map = Beatmap::from_path(beatmap_path)?;
+            let result = refx_pp_rs::osu_2019::OsuPP::new(&map)
+                .mods(score.mods)
+                .combo(score.max_combo)
+                .accuracy(score.acc as f32)
+                .n300(score.n300)
+                .n100(score.n100)
+                .n50(score.n50)
+                .misses(score.nmiss)
+                .calculate();
+            (result.pp, result.difficulty.stars, score.mods)
+        },
 
-    if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
-        println!("Calculated RX PP is infinite or NaN");
-        recalculated_pp = 0.0;
-    }
+        // shouldnt needed?
+        // theres no change here
+        // wait nvm there is
+        PPCalculationType::ScoreV2NoCV { relax } => {
+            let map = Beatmap::from_path(beatmap_path)?;
+            let mods = score.mods | if relax { 1 << 7 } else { 0 };
+            let result = refx_pp_rs::osu_2019_2::FxPP::new_from_map(&map)
+                .mods(mods)
+                .combo(score.max_combo)
+                .accuracy(score.acc as f32)
+                .n300(score.n300)
+                .n100(score.n100)
+                .n50(score.n50)
+                .misses(score.nmiss)
+                .calculate();
+            (result.pp, result.difficulty.stars, mods)
+        },
 
-    let difference = recalculated_pp - original_pp;
+        PPCalculationType::VanillaCheats => {
+            let map = Beatmap::from_path(beatmap_path)?;
+            let result = map.pp()
+                .mods(score.mods)
+                .combo(score.max_combo)
+                .accuracy(score.acc)
+                .n300(score.n300)
+                .n100(score.n100)
+                .n50(score.n50)
+                .n_misses(score.nmiss)
+                .ac(score.aim_value)
+                .arc(score.ar_value)
+                .hdr(score.hdr != 0)
+                .calculate();
+            (result.pp(), result.stars(), score.mods)
+        },
 
-    let mut stars = round(result.difficulty.stars, 2);
+        PPCalculationType::RelaxCheats => {
+            let map = Beatmap::from_path(beatmap_path)?;
+            let result = refx_pp_rs::osu_2019::OsuPP::new(&map)
+                .mods(score.mods)
+                .combo(score.max_combo)
+                .accuracy(score.acc as f32)
+                .n300(score.n300)
+                .n100(score.n100)
+                .n50(score.n50)
+                .misses(score.nmiss)
+                .ac(score.aim_value)
+                .arc(score.ar_value)
+                .tw(score.twval as usize)
+                .cs(score.cs != 0)
+                .calculate();
+            (result.pp, result.difficulty.stars, score.mods)
+        },
 
-    if stars.is_infinite() || stars.is_nan() {
-        println!("Calculated RX stars is infinite or NaN");
-        stars = 0.0;
-    }
+        PPCalculationType::ScoreV2Cheats { relax } => {
+            let map = Beatmap::from_path(beatmap_path)?;
+            let mods = score.mods | if relax { 1 << 7 } else { 0 };
+            let result = refx_pp_rs::osu_2019_2::FxPP::new_from_map(&map)
+                .mods(mods)
+                .combo(score.max_combo)
+                .accuracy(score.acc as f32)
+                .n300(score.n300)
+                .n100(score.n100)
+                .n50(score.n50)
+                .misses(score.nmiss)
+                .calculate();
+            (result.pp, result.difficulty.stars, mods)
+        },
 
-    println!(
-        "Calculated RX PP for player '{}': Original = {}, Recalculated = {}, Difference = {}, Stars = {}", 
-        player_name, original_pp, recalculated_pp, difference, stars
-    );
+        PPCalculationType::VanillaLegit => {
+            let map = ifLegitBeatmap::from_path(beatmap_path).await?;
+            let result = map.pp()
+                .mods(score.mods)
+                .combo(score.max_combo)
+                .accuracy(score.acc)
+                .n300(score.n300)
+                .n100(score.n100)
+                .n50(score.n50)
+                .n_misses(score.nmiss)
+                .calculate();
+            (result.pp(), result.stars(), score.mods)
+        },
 
-    Ok(PPCalculationResult {
-        stars,
-        beatmap_id: score.beatmap.id,
-        original_pp,
-        recalculated_pp,
-        difference,
-        mods: score.mods,
-        version: 1,
-    })
-}
+        PPCalculationType::RelaxLegit => {
+            let map = ifLegitBeatmap::from_path(beatmap_path).await?;
+            let result = if_servers_legit::osu_2019::OsuPP::new(&map)
+                .mods(score.mods)
+                .combo(score.max_combo)
+                .accuracy(score.acc as f32)
+                .n300(score.n300)
+                .n100(score.n100)
+                .n50(score.n50)
+                .misses(score.nmiss)
+                .calculate();
+            (result.pp, result.difficulty.stars, score.mods)
+        },
 
-pub async fn calculate_pp_scorev2(
-    beatmap_path: &str, 
-    score: &PlayerScore, 
-    player_name: &str, 
-    relax: bool
-) -> Result<PPCalculationResult, Box<dyn Error>> {
-    println!(
-        "Calculating ScoreV2 PP for player '{}' using beatmap path '{}'",
-        player_name, beatmap_path
-    );
+        PPCalculationType::ScoreV2Legit { relax } => {
+            let map = ifLegitBeatmap::from_path(beatmap_path).await?;
+            let mods = score.mods | if relax { 1 << 7 } else { 0 };
+            let result = if_servers_legit::osu_2019_scorev2::FxPP::new_from_map(&map)
+                .mods(mods)
+                .combo(score.max_combo)
+                .accuracy(score.acc as f32)
+                .n300(score.n300)
+                .n100(score.n100)
+                .n50(score.n50)
+                .misses(score.nmiss)
+                .calculate();
+            (result.pp, result.difficulty.stars, mods)
+        },
+        
+        PPCalculationType::VanillaCheatsLive => {
+            let map = livePPBeatmap::from_path(beatmap_path).await?;
+            let result = map.pp()
+                .mods(score.mods)
+                .combo(score.max_combo)
+                .accuracy(score.acc)
+                .n300(score.n300)
+                .n100(score.n100)
+                .n50(score.n50)
+                .n_misses(score.nmiss)
+                .ac(score.aim_value)
+                .arc(score.ar_value)
+                .hdr(score.hdr != 0)
+                .calculate();
+            (result.pp(), result.stars(), score.mods)
+        },
 
-    let map = Beatmap::from_path(beatmap_path)?;
+        PPCalculationType::RelaxCheatsLive => {
+            let map = livePPBeatmap::from_path(beatmap_path).await?;
+            let result = live_pp::osu_2019::OsuPP::new(&map)
+                .mods(score.mods)
+                .combo(score.max_combo)
+                .accuracy(score.acc as f32)
+                .n300(score.n300)
+                .n100(score.n100)
+                .n50(score.n50)
+                .misses(score.nmiss)
+                .ac(score.aim_value)
+                .arc(score.ar_value)
+                .tw(score.twval as usize)
+                .cs(score.cs != 0)
+                .calculate();
+            (result.pp, result.difficulty.stars, score.mods)
+        },
 
-    let original_pp = round(score.pp, 2);
+        PPCalculationType::ScoreV2CheatsLive { relax } => {
+            let map = livePPBeatmap::from_path(beatmap_path).await?;
+            let mods = score.mods | if relax { 1 << 7 } else { 0 };
+            let result = live_pp::osu_2019_2::FxPP::new_from_map(&map)
+                .mods(mods)
+                .combo(score.max_combo)
+                .accuracy(score.acc as f32)
+                .n300(score.n300)
+                .n100(score.n100)
+                .n50(score.n50)
+                .misses(score.nmiss)
+                .calculate();
+            (result.pp, result.difficulty.stars, mods)
+        },
+    };
 
-    let result = refx_pp_rs::osu_2019_2::FxPP::new_from_map(&map)
-        .mods(score.mods | if relax { 1 << 7 } else { 0 })
-        .combo(score.max_combo)
-        .accuracy(score.acc as f32)
-        .n300(score.n300)
-        .n100(score.n100)
-        .n50(score.n50)
-        .misses(score.nmiss)
-        .calculate();
+    let mut final_pp = round(recalculated_pp, 2);
+    let mut final_stars = round(stars, 2);
 
-    let mut recalculated_pp = round(result.pp, 2);
-
-    if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
+    // this sometimes happen
+    if final_pp.is_infinite() || final_pp.is_nan() {
         println!("Calculated pp is infinite or NaN");
-        recalculated_pp = 0.0;
+        final_pp = 0.0;
     }
 
-    let difference = recalculated_pp - original_pp;
-    let mut stars = round(result.difficulty.stars, 2);
-
-    if stars.is_infinite() || stars.is_nan() {
+    if final_stars.is_infinite() || final_stars.is_nan() {
         println!("Calculated stars is infinite or NaN");
-        stars = 0.0;
+        final_stars = 0.0;
     }
+
+    let difference = final_pp - original_pp;
 
     println!(
         "Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}, Stars = {}", 
-        player_name, original_pp, recalculated_pp, difference, stars
+        player_name, original_pp, final_pp, difference, final_stars
     );
 
     Ok(PPCalculationResult {
-        stars,
+        stars: final_stars,
         beatmap_id: score.beatmap.id,
         original_pp,
-        recalculated_pp,
+        recalculated_pp: final_pp,
         difference,
-        mods: score.mods | if relax { 1 << 7 } else { 0 },
-        version: 2,
-    })
-}
-
-/// main with cheats
-pub async fn calculate_pp_vn_cv(
-    beatmap_path: &str, 
-    score: &PlayerScore, 
-    player_name: &str
-) -> Result<PPCalculationResult, Box<dyn Error>> {
-    println!("Calculating PP for player '{}' using beatmap path '{}'", player_name, beatmap_path);
-
-    let map = Beatmap::from_path(beatmap_path)?;
-
-    let original_pp = round(score.pp, 2);
-
-    let result = map.pp()
-        .mods(score.mods)
-        .combo(score.max_combo)
-        .accuracy(score.acc)
-        .n300(score.n300)
-        .n100(score.n100)
-        .n50(score.n50)
-        .n_misses(score.nmiss)
-        .ac(score.aim_value)
-        .arc(score.ar_value)
-        .hdr(score.hdr != 0)
-        .calculate();
-
-    let mut recalculated_pp = round(result.pp(), 2);
-
-    if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
-        println!("Calculated pp is infinite or NaN");
-        recalculated_pp = 0.0;
-    }
-
-    let difference = recalculated_pp - original_pp;
-
-    let mut stars = round(result.stars(), 2);
-
-    if stars.is_infinite() || stars.is_nan() {
-        println!("Calculated stars is infinite or NaN");
-        stars = 0.0;
-    }
-
-    println!(
-        "Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}, Stars = {}", 
-        player_name, original_pp, recalculated_pp, difference, stars
-    );
-
-    Ok(PPCalculationResult {
-        stars,
-        beatmap_id: score.beatmap.id,
-        original_pp,
-        recalculated_pp,
-        difference,
-        mods: score.mods,
-        version: 0,
-    })
-}
-
-pub async fn calculate_pp_relax_cv(
-    beatmap_path: &str, 
-    score: &PlayerScore, 
-    player_name: &str
-) -> Result<PPCalculationResult, Box<dyn Error>> {
-    println!(
-        "Calculating RX PP for player '{}' using beatmap path '{}'",
-        player_name, beatmap_path
-    );
-
-    let map = Beatmap::from_path(beatmap_path)?;
-
-    let original_pp = round(score.pp, 2);
-
-    let result = refx_pp_rs::osu_2019::OsuPP::new(&map)
-        .mods(score.mods)
-        .combo(score.max_combo)
-        .accuracy(score.acc as f32)
-        .n300(score.n300)
-        .n100(score.n100)
-        .n50(score.n50)
-        .misses(score.nmiss)
-        .ac(score.aim_value)
-        .arc(score.ar_value)
-        .tw(score.twval as usize)
-        .cs(score.cs != 0)
-        .calculate();
-
-    let mut recalculated_pp = round(result.pp, 2);
-
-    if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
-        println!("Calculated RX PP is infinite or NaN");
-        recalculated_pp = 0.0;
-    }
-
-    let difference = recalculated_pp - original_pp;
-
-    let mut stars = round(result.difficulty.stars, 2);
-
-    if stars.is_infinite() || stars.is_nan() {
-        println!("Calculated RX stars is infinite or NaN");
-        stars = 0.0;
-    }
-
-    println!(
-        "Calculated RX PP for player '{}': Original = {}, Recalculated = {}, Difference = {}, Stars = {}", 
-        player_name, original_pp, recalculated_pp, difference, stars
-    );
-
-    Ok(PPCalculationResult {
-        stars,
-        beatmap_id: score.beatmap.id,
-        original_pp,
-        recalculated_pp,
-        difference,
-        mods: score.mods,
-        version: 1,
-    })
-}
-
-pub async fn calculate_pp_scorev2_cv(
-    beatmap_path: &str, 
-    score: &PlayerScore, 
-    player_name: &str, 
-    relax: bool
-) -> Result<PPCalculationResult, Box<dyn Error>> {
-    println!(
-        "Calculating ScoreV2 PP for player '{}' using beatmap path '{}'",
-        player_name, beatmap_path
-    );
-
-    let map = Beatmap::from_path(beatmap_path)?;
-
-    let original_pp = round(score.pp, 2);
-
-    let result = refx_pp_rs::osu_2019_2::FxPP::new_from_map(&map)
-        .mods(score.mods | if relax { 1 << 7 } else { 0 })
-        .combo(score.max_combo)
-        .accuracy(score.acc as f32)
-        .n300(score.n300)
-        .n100(score.n100)
-        .n50(score.n50)
-        .misses(score.nmiss)
-        .calculate();
-
-    let mut recalculated_pp = round(result.pp, 2);
-
-    if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
-        println!("Calculated pp is infinite or NaN");
-        recalculated_pp = 0.0;
-    }
-
-    let difference = recalculated_pp - original_pp;
-    let mut stars = round(result.difficulty.stars, 2);
-
-    if stars.is_infinite() || stars.is_nan() {
-        println!("Calculated stars is infinite or NaN");
-        stars = 0.0;
-    }
-
-    println!(
-        "Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}, Stars = {}", 
-        player_name, original_pp, recalculated_pp, difference, stars
-    );
-
-    Ok(PPCalculationResult {
-        stars,
-        beatmap_id: score.beatmap.id,
-        original_pp,
-        recalculated_pp,
-        difference,
-        mods: score.mods | if relax { 1 << 7 } else { 0 },
-        version: 2,
-    })
-}
-
-/// if-servers-legit
-pub async fn calculate_pp_vn_lgt(beatmap_path: &str, score: &PlayerScore, player_name: &str) -> Result<PPCalculationResult, Box<dyn Error>> {
-    println!("Calculating PP for player '{}' using beatmap path '{}'", player_name, beatmap_path);
-
-    let map = ifLegitBeatmap::from_path(beatmap_path).await?;
-
-    let original_pp = round(score.pp, 2);
-
-    let result = map.pp()
-        .mods(score.mods)
-        .combo(score.max_combo)
-        .accuracy(score.acc)
-        .n300(score.n300)
-        .n100(score.n100)
-        .n50(score.n50)
-        .n_misses(score.nmiss)
-        .calculate();
-
-    let mut recalculated_pp = round(result.pp(), 2);
-
-    if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
-        println!("Calculated pp is infinite or NaN");
-        recalculated_pp = 0.0;
-    }
-
-    let difference = recalculated_pp - original_pp;
-
-    let mut stars = round(result.stars(), 2);
-
-    if stars.is_infinite() || stars.is_nan() {
-        println!("Calculated stars is infinite or NaN");
-        stars = 0.0;
-    }
-
-    println!(
-        "Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}, Stars = {}", 
-        player_name, original_pp, recalculated_pp, difference, stars
-    );
-
-    Ok(PPCalculationResult {
-        stars,
-        beatmap_id: score.beatmap.id,
-        original_pp,
-        recalculated_pp,
-        difference,
-        mods: score.mods,
-        version: 0,
-    })
-}
-
-pub async fn calculate_pp_relax_lgt(beatmap_path: &str, score: &PlayerScore, player_name: &str) -> Result<PPCalculationResult, Box<dyn Error>> {
-    println!(
-        "Calculating RX PP for player '{}' using beatmap path '{}'",
-        player_name, beatmap_path
-    );
-
-    let map = ifLegitBeatmap::from_path(beatmap_path).await?;
-
-    let original_pp = round(score.pp, 2);
-
-    let result = if_servers_legit::osu_2019::OsuPP::new(&map)
-        .mods(score.mods)
-        .combo(score.max_combo)
-        .accuracy(score.acc as f32)
-        .n300(score.n300)
-        .n100(score.n100)
-        .n50(score.n50)
-        .misses(score.nmiss)
-        .calculate();
-
-    let mut recalculated_pp = round(result.pp, 2);
-
-    if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
-        println!("Calculated RX PP is infinite or NaN");
-        recalculated_pp = 0.0;
-    }
-
-    let difference = recalculated_pp - original_pp;
-
-    let mut stars = round(result.difficulty.stars, 2);
-
-    if stars.is_infinite() || stars.is_nan() {
-        println!("Calculated RX stars is infinite or NaN");
-        stars = 0.0;
-    }
-
-    println!(
-        "Calculated RX PP for player '{}': Original = {}, Recalculated = {}, Difference = {}, Stars = {}", 
-        player_name, original_pp, recalculated_pp, difference, stars
-    );
-
-    Ok(PPCalculationResult {
-        stars,
-        beatmap_id: score.beatmap.id,
-        original_pp,
-        recalculated_pp,
-        difference,
-        mods: score.mods,
-        version: 1,
-    })
-}
-
-pub async fn calculate_pp_scorev2_lgt(
-    beatmap_path: &str, 
-    score: &PlayerScore, 
-    player_name: &str, 
-    relax: bool
-) -> Result<PPCalculationResult, Box<dyn Error>> {
-    println!(
-        "Calculating ScoreV2 PP for player '{}' using beatmap path '{}'",
-        player_name, beatmap_path
-    );
-
-    let map = ifLegitBeatmap::from_path(beatmap_path).await?;
-
-    let original_pp = round(score.pp, 2);
-
-    let result = if_servers_legit::osu_2019_scorev2::FxPP::new_from_map(&map)
-        .mods(score.mods | if relax { 1 << 7 } else { 0 })
-        .combo(score.max_combo)
-        .accuracy(score.acc as f32)
-        .n300(score.n300)
-        .n100(score.n100)
-        .n50(score.n50)
-        .misses(score.nmiss)
-        .calculate();
-
-    let mut recalculated_pp = round(result.pp, 2);
-
-    if recalculated_pp.is_infinite() || recalculated_pp.is_nan() {
-        println!("Calculated pp is infinite or NaN");
-        recalculated_pp = 0.0;
-    }
-
-    let difference = recalculated_pp - original_pp;
-    let mut stars = round(result.difficulty.stars, 2);
-
-    if stars.is_infinite() || stars.is_nan() {
-        println!("Calculated stars is infinite or NaN");
-        stars = 0.0;
-    }
-
-    println!(
-        "Calculated PP for player '{}': Original = {}, Recalculated = {}, Difference = {}, Stars = {}", 
-        player_name, original_pp, recalculated_pp, difference, stars
-    );
-
-    Ok(PPCalculationResult {
-        stars,
-        beatmap_id: score.beatmap.id,
-        original_pp,
-        recalculated_pp,
-        difference,
-        mods: score.mods | if relax { 1 << 7 } else { 0 },
-        version: 2,
+        mods,
+        version: match calc_type {
+            PPCalculationType::VanillaNoCV | PPCalculationType::VanillaCheats | 
+            PPCalculationType::VanillaLegit | PPCalculationType::VanillaCheatsLive => 0,
+            PPCalculationType::RelaxNoCV | PPCalculationType::RelaxCheats | 
+            PPCalculationType::RelaxLegit | PPCalculationType::RelaxCheatsLive => 1,
+            PPCalculationType::ScoreV2NoCV { .. } | PPCalculationType::ScoreV2Cheats { .. } | 
+            PPCalculationType::ScoreV2Legit { .. } | PPCalculationType::ScoreV2CheatsLive { .. } => 2,
+        },
     })
 }
